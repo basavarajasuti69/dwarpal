@@ -1,0 +1,223 @@
+tables:
+- name: dim_customers
+  description: ''
+  columns:
+  - name: customer_id
+    type: character varying
+    description: ''
+  - name: customer_unique_id
+    type: character varying
+    description: ''
+  - name: customer_city
+    type: character varying
+    description: ''
+  - name: customer_state
+    type: character varying
+    description: ''
+  - name: customer_zip_code_prefix
+    type: integer
+    description: ''
+- name: dim_date
+  description: ''
+  columns:
+  - name: date_id
+    type: integer
+    description: ''
+  - name: full_date
+    type: date
+    description: ''
+  - name: year
+    type: integer
+    description: ''
+  - name: month
+    type: integer
+    description: ''
+  - name: day
+    type: integer
+    description: ''
+  - name: day_of_week
+    type: character varying
+    description: ''
+  - name: quarter
+    type: integer
+    description: ''
+- name: dim_products
+  description: ''
+  columns:
+  - name: product_id
+    type: character varying
+    description: ''
+  - name: product_category_name
+    type: character varying
+    description: ''
+  - name: product_category_name_english
+    type: character varying
+    description: ''
+  - name: product_weight_g
+    type: numeric
+    description: ''
+  - name: product_length_cm
+    type: numeric
+    description: ''
+  - name: product_height_cm
+    type: numeric
+    description: ''
+  - name: product_width_cm
+    type: numeric
+    description: ''
+- name: dim_sellers
+  description: ''
+  columns:
+  - name: seller_id
+    type: character varying
+    description: ''
+  - name: seller_city
+    type: character varying
+    description: ''
+  - name: seller_state
+    type: character varying
+    description: ''
+  - name: seller_zip_code_prefix
+    type: integer
+    description: ''
+- name: ev_charging_stations
+  description: Count of public and fast EV charging stations per state in India.
+  columns:
+  - name: id
+    type: integer
+    description: ''
+  - name: state_name
+    type: character varying
+    description: ''
+  - name: public_chargers
+    type: integer
+    description: ''
+  - name: fast_chargers
+    type: integer
+    description: Number of DC fast chargers (subset of public chargers).
+- name: ev_state_registrations
+  description: State-wise electric vehicle registration counts by year and category
+    (2W, 4W).
+  columns:
+  - name: id
+    type: integer
+    description: ''
+  - name: state_name
+    type: character varying
+    description: ''
+  - name: vehicle_category
+    type: character varying
+    description: ''
+  - name: registration_year
+    type: integer
+    description: ''
+  - name: total_units
+    type: integer
+    description: ''
+- name: fact_order_items
+  description: ''
+  columns:
+  - name: order_item_sk
+    type: integer
+    description: ''
+  - name: order_id
+    type: character varying
+    description: ''
+  - name: order_item_id
+    type: integer
+    description: ''
+  - name: customer_id
+    type: character varying
+    description: ''
+  - name: product_id
+    type: character varying
+    description: ''
+  - name: seller_id
+    type: character varying
+    description: ''
+  - name: order_purchase_date_id
+    type: integer
+    description: ''
+  - name: order_status
+    type: character varying
+    description: ''
+  - name: price
+    type: numeric
+    description: ''
+  - name: freight_value
+    type: numeric
+    description: ''
+  - name: delivery_delay_days
+    type: integer
+    description: ''
+- name: fact_payments
+  description: ''
+  columns:
+  - name: payment_sk
+    type: integer
+    description: ''
+  - name: order_id
+    type: character varying
+    description: ''
+  - name: payment_sequential
+    type: integer
+    description: ''
+  - name: payment_type
+    type: character varying
+    description: ''
+  - name: payment_installments
+    type: integer
+    description: ''
+  - name: payment_value
+    type: numeric
+    description: ''
+- name: fact_reviews
+  description: ''
+  columns:
+  - name: review_id
+    type: character varying
+    description: ''
+  - name: order_id
+    type: character varying
+    description: ''
+  - name: review_score
+    type: integer
+    description: ''
+  - name: has_comment
+    type: boolean
+    description: ''
+examples:
+- domain: Olist
+  question: How many total customers are there?
+  sql: SELECT COUNT(customer_id) FROM dim_customers;
+- domain: Olist
+  question: Which seller state has the most sellers?
+  sql: SELECT seller_state, COUNT(seller_id) as total FROM dim_sellers GROUP BY seller_state
+    ORDER BY total DESC LIMIT 1;
+- domain: Olist
+  question: What is the average review score?
+  sql: SELECT AVG(review_score) FROM fact_reviews;
+- domain: Olist
+  question: Show the top 5 product categories by number of products.
+  sql: SELECT product_category_name, COUNT(product_id) as cnt FROM dim_products GROUP
+    BY product_category_name ORDER BY cnt DESC LIMIT 5;
+- domain: Olist
+  question: What is the total freight value paid?
+  sql: SELECT SUM(freight_value) FROM fact_order_items;
+- domain: India EV
+  question: Which state has the most 2W EV registrations?
+  sql: SELECT state_name FROM ev_state_registrations WHERE vehicle_category = '2W'
+    ORDER BY total_units DESC LIMIT 1;
+- domain: India EV
+  question: Total fast chargers in Maharashtra?
+  sql: SELECT fast_chargers FROM ev_charging_stations WHERE state_name = 'Maharashtra';
+- domain: India EV
+  question: How many 4W EVs were registered in Delhi in 2024?
+  sql: SELECT total_units FROM ev_state_registrations WHERE state_name = 'Delhi' AND
+    vehicle_category = '4W' AND registration_year = 2024;
+- domain: India EV
+  question: List all states with more than 1500 fast chargers.
+  sql: SELECT state_name FROM ev_charging_stations WHERE fast_chargers > 1500;
+- domain: India EV
+  question: What is the total number of public chargers across all states?
+  sql: SELECT SUM(public_chargers) FROM ev_charging_stations;
