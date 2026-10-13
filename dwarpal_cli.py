@@ -25,6 +25,47 @@ def get_readonly_url(admin_url: str) -> str:
         netloc += f":{parsed.port}"
     return urlunparse(parsed._replace(netloc=netloc))
 
+from audit import log_security_event
+
+def execute_sql_with_self_correction(initial_sql: str, schema_text: str, question: str, readonly_url: str, max_retries=2):
+    """Executes SQL against the database with automated AI self-correction on failure."""
+    client = genai.Client()
+    current_sql = initial_sql
+    
+    for attempt in range(max_retries + 1):
+        try:
+            with psycopg.connect(readonly_url) as conn:
+                with conn.cursor() as cursor:
+                    # Safely wrap query to enforce maximum rows limit
+                    wrapped_query = f"SELECT * FROM ({current_sql.rstrip(';')}) AS sub LIMIT 1000"
+                    cursor.execute(wrapped_query)
+                    return cursor.fetchall(), current_sql
+        except Exception as db_err:
+            if attempt == max_retries:
+                log_security_event("SQL_ERROR", question, current_sql, str(db_err))
+                raise db_err
+            
+            print(f"⚠️ SQL Error: {db_err}\n🔄 Attempting AI self-correction...")
+            
+            fix_prompt = f"""
+            The previous PostgreSQL query failed with this error:
+            {db_err}
+
+            Original User Question: {question}
+            Failed SQL Query: {current_sql}
+
+            Database Schema:
+            {schema_text}
+
+            Please fix the SQL query so it runs successfully against the schema. Return ONLY the corrected SQL query string.
+            """
+            
+            response = client.models.generate_content(
+                model=os.environ.get("GEMINI_MODEL", "gemini-3.6-flash"),
+                contents=fix_prompt,
+            )
+            current_sql = response.text.strip().replace("```sql", "").replace("```", "").strip()
+
 def generate_sql(question: str, schema_text: str) -> SqlGeneration:
     """Uses Gemini to generate SQL from a natural language question, with retries."""
     client = genai.Client()
