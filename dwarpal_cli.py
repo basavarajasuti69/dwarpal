@@ -1,4 +1,5 @@
 import os
+from policy import load_allowed_tables, validate_sql
 import time
 import urllib.parse
 import psycopg
@@ -101,7 +102,13 @@ def main():
             print(f"🛠️  SQL: {result.sql}")
             print("🚀 Executing...")
             
-            rows = execute_query(result.sql, readonly_url)
+            verdict = validate_sql(result.sql, load_allowed_tables())
+            if not verdict.allowed:
+                print(f"🛑 Blocked by Dwarpal policy: {verdict.reason}")
+                continue
+            if verdict.sql != result.sql:
+                print(f"🔒 Running as: {verdict.sql}")
+            rows = execute_query(verdict.sql, readonly_url)
             print("📊 Results:")
             for row in rows:
                 print(f"  {row}")
