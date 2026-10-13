@@ -17,7 +17,7 @@ class SqlGeneration(BaseModel):
 def get_readonly_url(admin_url: str) -> str:
     """Converts the admin DB URL to use the read-only credentials."""
     parsed = urllib.parse.urlparse(admin_url)
-    netloc = f"dwarpal_reader:dwarpal_readonly_123@{parsed.hostname}"
+    netloc = f"dwarpal_reader:{os.environ["DWARPAL_READER_PASSWORD"]}@{parsed.hostname}"
     if parsed.port:
         netloc += f":{parsed.port}"
     return urllib.parse.urlunparse(parsed._replace(netloc=netloc))

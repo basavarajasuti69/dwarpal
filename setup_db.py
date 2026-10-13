@@ -1,5 +1,6 @@
 import os
 import psycopg
+from psycopg import sql
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,7 +14,7 @@ def setup_readonly_role():
                 
                 cur.execute("SELECT 1 FROM pg_roles WHERE rolname='dwarpal_reader'")
                 if not cur.fetchone():
-                    cur.execute("CREATE ROLE dwarpal_reader WITH LOGIN PASSWORD 'dwarpal_readonly_123';")
+                    cur.execute(sql.SQL("CREATE ROLE dwarpal_reader WITH LOGIN PASSWORD {}").format(sql.Literal(os.environ["DWARPAL_READER_PASSWORD"])))
                     print("✅ Created role 'dwarpal_reader'.")
                 else:
                     print("ℹ️ Role 'dwarpal_reader' already exists.")
