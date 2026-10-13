@@ -88,3 +88,20 @@ def validate_sql(sql: str, allowed_tables: set[str], max_rows: int = MAX_ROWS) -
             stmt = stmt.limit(max_rows)
 
     return PolicyResult(True, stmt.sql(dialect="postgres"), "OK")
+
+
+import re
+
+RESTRICTED_NAMES = re.compile(r"\b(staging_\w+|pipeline_run_log)\b", re.IGNORECASE)
+
+
+def check_question(question: str) -> PolicyResult:
+    """Block questions that name a restricted table, before the LLM sees them.
+
+    The LLM may silently rewrite such a request into a query on an allowed
+    table, which the SQL validator would then (correctly) accept.
+    """
+    match = RESTRICTED_NAMES.search(question or "")
+    if match:
+        return _reject(f"Question refers to restricted table '{match.group(1)}'.")
+    return PolicyResult(True, None, "OK")

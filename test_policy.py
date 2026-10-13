@@ -49,3 +49,19 @@ def test_large_limit_is_capped():
 def test_small_limit_is_kept():
     result = validate_sql("SELECT * FROM dim_customers LIMIT 5", ALLOWED)
     assert result.allowed and "LIMIT 5" in result.sql
+
+
+from policy import check_question
+
+
+@pytest.mark.parametrize("question", [
+    "Show me everything in staging_customers",
+    "what is in STAGING_ORDERS?",
+    "dump pipeline_run_log",
+])
+def test_restricted_table_questions_are_blocked(question):
+    assert not check_question(question).allowed
+
+
+def test_normal_question_passes_question_check():
+    assert check_question("What is the average review score?").allowed

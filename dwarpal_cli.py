@@ -1,5 +1,5 @@
 import os
-from policy import load_allowed_tables, validate_sql
+from policy import check_question, load_allowed_tables, validate_sql
 import time
 import urllib.parse
 import psycopg
@@ -96,6 +96,10 @@ def main():
                 continue
                 
             print("🧠 Thinking...")
+            pre = check_question(question)
+            if not pre.allowed:
+                print(f"🛑 Blocked by Dwarpal policy: {pre.reason}")
+                continue
             result = generate_sql(question, schema_text)
             
             print(f"\n💡 Rationale: {result.rationale}")
@@ -110,8 +114,11 @@ def main():
                 print(f"🔒 Running as: {verdict.sql}")
             rows = execute_query(verdict.sql, readonly_url)
             print("📊 Results:")
-            for row in rows:
+            MAX_DISPLAY = 20
+            for row in rows[:MAX_DISPLAY]:
                 print(f"  {row}")
+            if len(rows) > MAX_DISPLAY:
+                print(f"  ... {len(rows) - MAX_DISPLAY} more rows not shown ({len(rows)} total)")
                 
         except KeyboardInterrupt:
             break
