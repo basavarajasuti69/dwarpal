@@ -1,7 +1,9 @@
 import os
 from policy import check_question, load_allowed_tables, validate_sql
 import time
-import urllib.parse
+from urllib.parse import urlparse, urlunparse, quote
+from google import genai
+from pii_guard import redact_sql_results
 import psycopg
 from pydantic import BaseModel
 from google import genai
@@ -17,11 +19,11 @@ class SqlGeneration(BaseModel):
 
 def get_readonly_url(admin_url: str) -> str:
     """Converts the admin DB URL to use the read-only credentials."""
-    parsed = urllib.parse.urlparse(admin_url)
-    netloc = f"dwarpal_reader:{os.environ["DWARPAL_READER_PASSWORD"]}@{parsed.hostname}"
+    parsed = urlparse(admin_url)
+    netloc = f"dwarpal_reader:{os.environ['DWARPAL_READER_PASSWORD']}@{parsed.hostname}"
     if parsed.port:
         netloc += f":{parsed.port}"
-    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+    return urlunparse(parsed._replace(netloc=netloc))
 
 def generate_sql(question: str, schema_text: str) -> SqlGeneration:
     """Uses Gemini to generate SQL from a natural language question, with retries."""
