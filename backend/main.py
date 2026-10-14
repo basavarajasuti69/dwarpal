@@ -36,10 +36,16 @@ class QueryRequest(BaseModel):
     question: str
     history: Optional[List[ChatMessage]] = []
 
-class AIAnalysisResponse(BaseModel):
+# Pydantic models for Multi-Agent Orchestration
+class PlannerResponse(BaseModel):
     sql: str
     rationale: str
     recommended_chart: str  # 'bar', 'line', 'pie', 'metric'
+
+class CriticResponse(BaseModel):
+    is_approved: bool
+    critique_feedback: str
+    corrected_sql: Optional[str] = None
 
 def get_readonly_url():
     admin_url = os.environ["NEON_DB_URL"]
@@ -77,45 +83,62 @@ def process_query(req: QueryRequest):
     if req.history:
         context_str = "\n".join([f"{msg.role.upper()}: {msg.content}" for msg in req.history[-4:]])
 
-    prompt = f"""
-    You are an expert autonomous PostgreSQL data analyst agent.
-    Database Schema tables and columns: {allowed_tables}
-
+    # 3. PLANNER AGENT
+    planner_prompt = f"""
+    You are the Planner Agent. Your job is to analyze the user's question and schema, then draft a precise PostgreSQL query.
+    Schema: {allowed_tables}
     Recent Conversation History:
     {context_str}
-
-    Current User Question: {req.question}
-
-    Instructions:
-    1. Generate a highly accurate PostgreSQL query.
-    2. Provide a short rationale.
-    3. Choose the best chart visualization type for the expected result structure from: 'bar', 'line', 'pie', 'metric'.
+    User Question: {req.question}
     """
 
-    # 3. Text-to-SQL Generation with LLM
     try:
-        response = client.models.generate_content(
+        planner_res = client.models.generate_content(
             model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=prompt,
+            contents=planner_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=AIAnalysisResponse,
+                response_schema=PlannerResponse,
                 temperature=0.0
             ),
         )
-        parsed_output = response.parsed
-        sql_query = parsed_output.sql
-        recommended_chart = parsed_output.recommended_chart
+        draft_sql = planner_res.parsed.sql
+        chart_type = planner_res.parsed.recommended_chart
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Planner Agent failed: {str(e)}")
 
-    # 4. SQL Guardrail Validation
+    # 4. CRITIC AGENT (Auditing the draft SQL)
+    critic_prompt = f"""
+    You are the Critic Agent, an expert database administrator and security auditor.
+    Review this draft SQL query for safety, syntax validity against PostgreSQL, and adherence to allowed tables ({allowed_tables}).
+    Draft SQL: {draft_sql}
+    User Question: {req.question}
+    
+    If the SQL is valid and safe, set is_approved to true. If there are syntax errors or risks, set is_approved to false and provide corrected_sql.
+    """
+
+    try:
+        critic_res = client.models.generate_content(
+            model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
+            contents=critic_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=CriticResponse,
+                temperature=0.0
+            ),
+        )
+        critic_output = critic_res.parsed
+        sql_query = critic_output.corrected_sql if not critic_output.is_approved and critic_output.corrected_sql else draft_sql
+    except Exception:
+        sql_query = draft_sql
+
+    # 5. SQL Guardrail Validation
     sql_validation = validate_sql(sql_query, allowed_tables)
     if not sql_validation.allowed:
         log_security_event("POLICY_BLOCKED", req.question, sql_query, sql_validation.reason)
         raise HTTPException(status_code=403, detail=sql_validation.reason)
 
-    # 5. Autonomous SQL Self-Correction Execution Loop
+    # 6. Autonomous SQL Self-Correction Execution Loop
     max_retries = 2
     raw_results = None
     last_db_error = None
@@ -127,16 +150,14 @@ def process_query(req: QueryRequest):
                     wrapped_query = f"SELECT * FROM ({sql_query.rstrip(';')}) AS sub LIMIT 1000"
                     cursor.execute(wrapped_query)
                     raw_results = cursor.fetchall()
-            break # Success, exit retry loop
+            break 
         except Exception as db_err:
             last_db_error = str(db_err)
             if attempt < max_retries - 1:
-                # Agent self-correction prompt back to Gemini
                 correction_prompt = f"""
                 The previous SQL query generated for the question '{req.question}' failed to execute on PostgreSQL.
                 Failed SQL: {sql_query}
                 Database Error: {last_db_error}
-                
                 Please fix the SQL query and return the corrected JSON response.
                 """
                 try:
@@ -145,22 +166,22 @@ def process_query(req: QueryRequest):
                         contents=correction_prompt,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
-                            response_schema=AIAnalysisResponse,
+                            response_schema=PlannerResponse,
                             temperature=0.0
                         ),
                     )
                     sql_query = retry_response.parsed.sql
-                    recommended_chart = retry_response.parsed.recommended_chart
+                    chart_type = retry_response.parsed.recommended_chart
                 except Exception:
                     break
             else:
                 log_security_event("SQL_ERROR", req.question, sql_query, last_db_error)
-                raise HTTPException(status_code=500, detail=f"Database execution error after self-correction: {last_db_error}")
+                raise HTTPException(status_code=500, detail=f"Database execution error: {last_db_error}")
 
-    # 6. PII Redaction & Caching
+    # 7. PII Redaction & Caching
     safe_results = redact_sql_results(raw_results)
 
-    # 7. AI Executive Insight Generation
+    # 8. AI Executive Insight Generation
     insight_text = "Query successfully executed and verified by autonomous agent."
     try:
         insight_prompt = f"Given the user question '{req.question}' and query results sample {str(safe_results[:5])}, write a concise 1-sentence executive business insight."
@@ -180,7 +201,7 @@ def process_query(req: QueryRequest):
         "source": "database",
         "question": req.question,
         "sql": sql_query,
-        "chart": recommended_chart,
+        "chart": chart_type,
         "results": safe_results,
         "insight": insight_text
     }
