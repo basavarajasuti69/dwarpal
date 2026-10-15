@@ -30,8 +30,8 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com';
-      const res = await fetch('https://dwarpal-aqs2.onrender.com/api/query', {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com').replace(/\/$/, '');
+      const res = await fetch(`${apiBase}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: targetQuery }),
@@ -45,7 +45,9 @@ export default function Home() {
         setQueryHistory([targetQuery, ...queryHistory].slice(0, 5));
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err instanceof TypeError
+        ? 'Unable to reach the Dwarpal API. Check that the Render service is live and NEXT_PUBLIC_API_URL points to it.'
+        : err.message || 'Query execution failed.');
     } finally {
       setLoading(false);
     }
