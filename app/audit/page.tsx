@@ -8,7 +8,7 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com';
     fetch(`${API_BASE}/api/audit`)
       .then((res) => res.json())
       .then((data) => {

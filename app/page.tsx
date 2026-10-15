@@ -30,7 +30,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com';
       const res = await fetch(`${API_BASE}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
