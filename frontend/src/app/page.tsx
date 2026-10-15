@@ -17,7 +17,7 @@ export default function Home() {
     setResponse(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/query', {
+      const res = await fetch('https://dwarpal-aqs2.onrender.com/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
