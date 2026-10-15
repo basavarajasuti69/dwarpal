@@ -8,7 +8,8 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/audit')
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    fetch(`${API_BASE}/api/audit`)
       .then((res) => res.json())
       .then((data) => {
         setAuditData(data);

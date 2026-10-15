@@ -30,7 +30,8 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/query', {
+      const res = await const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${API_BASE}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: targetQuery }),
