@@ -200,3 +200,23 @@ def query_endpoint(req: QueryRequest):
         status="ALLOWED",
         audit_hash=entry_hash
     )
+
+
+@app.get("/api/audit")
+def get_audit_logs():
+    try:
+        from verify_chain import load_audit_chain, verify_audit_chain
+        chain = load_audit_chain()
+        is_intact = verify_audit_chain()
+        return {
+            "is_intact": is_intact,
+            "record_count": len(chain),
+            "chain": list(reversed(chain))
+        }
+    except Exception as e:
+        return {
+            "is_intact": False,
+            "record_count": 0,
+            "chain": [],
+            "error": str(e)
+        }
