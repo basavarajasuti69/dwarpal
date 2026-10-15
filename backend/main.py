@@ -231,3 +231,8 @@ def get_audit_logs():
             "chain": [],
             "error": str(e)
         }
+
+
+@app.get("/")
+def read_root():
+    return {"status": "online", "service": "Dwarpal OS API", "version": "1.0.0"}
