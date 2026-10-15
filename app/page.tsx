@@ -31,7 +31,7 @@ export default function Home() {
 
     try {
       const res = await const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com';
-      const res = await fetch(`${API_BASE}/api/query`, {
+      const res = await fetch('https://dwarpal-aqs2.onrender.com/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: targetQuery }),
