@@ -1,4 +1,5 @@
 import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -46,7 +47,6 @@ except ImportError:
 try:
     from database import execute_read_only_query
 except ImportError:
-    raise HTTPException(status_code=500, detail="Database query execution failed on Neon PostgreSQL.")
 
 # ------------------------------------------------------------------
 # Request & Response Schemas
