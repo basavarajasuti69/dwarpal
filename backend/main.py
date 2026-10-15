@@ -44,7 +44,7 @@ except ImportError:
 try:
     from database import execute_read_only_query
 except ImportError:
-    def execute_read_only_query(sql): return ["col1"], [["val1"]]
+    raise HTTPException(status_code=500, detail="Database query execution failed on Neon PostgreSQL.")
 
 # ------------------------------------------------------------------
 # Request & Response Schemas
