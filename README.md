@@ -6,6 +6,10 @@ Dwarpal connects a Next.js interface to a FastAPI service, Google Gemini for SQL
 
 > This repository is an evolving prototype, not a production-ready enterprise security product. Read [Security boundaries](#security-boundaries) before connecting real or regulated data.
 
+## Product screenshot
+
+![Dwarpal OS query studio](screenshots/query-studio.png)
+
 ## What it does
 
 - Converts a natural-language question into a PostgreSQL `SELECT` query with Gemini.
