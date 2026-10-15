@@ -9,8 +9,6 @@ load_dotenv()
 
 app = FastAPI(title="Dwarpal OS API", version="1.0.0")
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,6 +16,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 
 # Import project modules safely
