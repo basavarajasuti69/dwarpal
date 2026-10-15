@@ -5,3 +5,5 @@ python-dotenv
 psycopg[binary]
 google-genai
 requests
+sqlglot
+PyYAML
