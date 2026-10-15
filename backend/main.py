@@ -47,7 +47,7 @@ except ImportError:
 try:
     from database import execute_read_only_query
 except ImportError:
-    raise HTTPException(status_code=500, detail="Execution error occurred.")
+    pass  # Neutralized startup exception
 
 # ------------------------------------------------------------------
 # Request & Response Schemas
