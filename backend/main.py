@@ -104,21 +104,29 @@ def generate_sql_with_gemini(question: str, schema_text: str) -> SqlGeneration:
     models_to_try = [primary_model] if primary_model == fallback_model else [primary_model, fallback_model]
 
     for model_name in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=SqlGeneration,
-                    temperature=0.0
-                ),
-            )
-            return response.parsed
-        except Exception as e:
-            if model_name == models_to_try[-1]:
-                raise e
-            print(f"⚠️ Model {model_name} failed. Falling back to {fallback_model}...")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=SqlGeneration,
+                        temperature=0.0
+                    ),
+                )
+                return response.parsed
+            except Exception as e:
+                if ("503" in str(e) or "429" in str(e) or "UNAVAILABLE" in str(e)) and attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    print(f"⚠️ Model {model_name} busy ({e}). Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    if model_name == models_to_try[-1] and attempt == max_retries - 1:
+                        raise e
+                    print(f"⚠️ Model {model_name} failed. Falling back to next model...")
+                    break
 
 @app.get("/api/health")
 def health_check():
