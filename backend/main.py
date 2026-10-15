@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
 from typing import List, Optional, Any
@@ -18,7 +19,6 @@ app.add_middleware(
 )
 
 
-from fastapi.middleware.cors import CORSMiddleware
 
 
 
