@@ -1,18 +1,27 @@
-import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sys, os
-from fastapi.middleware.cors import CORSMiddleware
-import os
-import time
-from typing import List, Optional, Any
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import logging
+from typing import Any, List, Optional
+from urllib.parse import urlparse, urlunparse
+
+import psycopg
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
+
+from audit_chain import log_audit_event
+from pii_guard import redact_sql_results
+from policy import check_question, load_allowed_tables, validate_sql
 
 load_dotenv()
+logger = logging.getLogger("dwarpal.api")
 
 app = FastAPI(title="Dwarpal OS API", version="1.0.0")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,39 +31,11 @@ app.add_middleware(
 )
 
 
-
-
-
-
-
-
-# Import project modules safely
-try:
-    from policy import check_policy
-except ImportError:
-    check_policy = None
-
-try:
-    from pii_guard import redact_sql_results
-except ImportError:
-    def redact_sql_results(rows): return rows
-
-try:
-    from audit_chain import log_audit_event
-except ImportError:
-    def log_audit_event(q, s, status, success): return "hash_mock"
-
-try:
-    from database import execute_read_only_query
-except ImportError:
-    pass  # Neutralized startup exception
-
-# ------------------------------------------------------------------
-# Request & Response Schemas
-# ------------------------------------------------------------------
 class QueryRequest(BaseModel):
-    question: str
-    history: Optional[List[Any]] = []
+    prompt: Optional[str] = None
+    question: Optional[str] = None
+    history: List[Any] = Field(default_factory=list)
+
 
 class QueryResponse(BaseModel):
     success: bool
@@ -62,162 +43,187 @@ class QueryResponse(BaseModel):
     sql: Optional[str] = None
     rationale: Optional[str] = None
     insight: Optional[str] = None
-    columns: List[str] = []
-    rows: List[Any] = []
-    results: List[Any] = []
+    columns: List[str] = Field(default_factory=list)
+    rows: List[Any] = Field(default_factory=list)
+    results: List[Any] = Field(default_factory=list)
     row_count: int = 0
-    status: str  # 'ALLOWED', 'BLOCKED', 'ERROR'
+    status: str
     message: Optional[str] = None
     audit_hash: Optional[str] = None
 
-# ------------------------------------------------------------------
-# Helper Wrappers & Policy Engine Integration
-# ------------------------------------------------------------------
-class PolicyVerdict:
-    def __init__(self, is_allowed: bool, reason: str = "", sql: str = ""):
-        self.is_allowed = is_allowed
-        self.reason = reason
-        self.sql = sql
 
-def validate_sql_query(sql: str) -> PolicyVerdict:
-    if check_policy is not None:
-        try:
-            res = check_policy(sql)
-            if isinstance(res, tuple):
-                return PolicyVerdict(res[0], res[1], sql)
-            if hasattr(res, 'is_allowed'):
-                return res
-        except Exception:
-            pass
+class SqlGeneration(BaseModel):
+    sql: str
+    rationale: str
 
-    sql_upper = sql.upper().strip()
-    forbidden = ["DROP", "DELETE", "TRUNCATE", "ALTER", "UPDATE", "INSERT"]
-    for kw in forbidden:
-        if kw in sql_upper:
-            return PolicyVerdict(False, f"Security Policy Violation: '{kw}' operation blocked.", sql)
-    return PolicyVerdict(True, "Query validated by policy engine.", sql)
 
-def generate_sql_from_prompt(question: str, model_name: str = "gemini-3.8-flash") -> tuple[str, str]:
+def _database_url() -> str:
+    """Return a read-only Neon URL, deriving one only when reader credentials exist."""
+    readonly_url = os.getenv("DWARPAL_READONLY_DB_URL") or os.getenv("NEON_READONLY_DB_URL")
+    if readonly_url:
+        return readonly_url
+
+    admin_url = os.getenv("NEON_DB_URL")
+    reader_password = os.getenv("DWARPAL_READER_PASSWORD")
+    if admin_url and reader_password:
+        parsed = urlparse(admin_url)
+        if not parsed.hostname:
+            raise ValueError("NEON_DB_URL is not a valid PostgreSQL URL")
+        netloc = f"dwarpal_reader:{reader_password}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+
+    raise ValueError(
+        "Database is not configured. Set DWARPAL_READONLY_DB_URL (or "
+        "NEON_READONLY_DB_URL), or set NEON_DB_URL and DWARPAL_READER_PASSWORD."
+    )
+
+
+def _generate_sql(question: str) -> SqlGeneration:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not configured")
+
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "schema.yaml")
+    with open(schema_path, "r", encoding="utf-8") as schema_file:
+        schema_text = schema_file.read()
+
+    client = genai.Client(api_key=api_key)
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    prompt = (
+        "You are a PostgreSQL business intelligence analyst. Generate one read-only "
+        "SELECT query using only tables in this schema. Do not use system catalogs, "
+        "comments, or multiple statements. Return a concise rationale.\n\n"
+        f"Database schema:\n{schema_text}\n\nUser question: {question}"
+    )
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=SqlGeneration,
+            temperature=0.0,
+        ),
+    )
+    parsed = response.parsed
+    if parsed is None:
+        raise ValueError("Gemini returned an empty SQL response")
+    if isinstance(parsed, SqlGeneration):
+        return parsed
+    return SqlGeneration.model_validate(parsed)
+
+
+def _execute_read_only_query(sql: str) -> tuple[List[str], List[tuple[Any, ...]]]:
+    with psycopg.connect(_database_url(), connect_timeout=10, autocommit=True) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SET default_transaction_read_only = on")
+            cursor.execute(sql)
+            columns = [description.name for description in (cursor.description or [])]
+            rows = cursor.fetchall() if cursor.description else []
+            return columns, rows
+
+
+def _audit(question: str, sql: Optional[str], status: str, success: bool) -> Optional[str]:
     try:
-        from gemini_generator import generate_sql
-        return generate_sql(question, model_name=model_name)
+        return log_audit_event(question, sql or "", status, success)
     except Exception:
-        from google import genai
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY missing")
-        client = genai.Client(api_key=api_key)
-        prompt = "Convert this natural language query into a standard PostgreSQL SELECT query. Return ONLY raw SQL code.\nQuestion: " + question
-        res = client.models.generate_content(model=model_name, contents=prompt)
-        raw_sql = res.text.strip().replace("```sql", "").replace("```", "").strip()
-        return raw_sql, "SQL generated using " + model_name
+        logger.exception("Failed to write audit event (status=%s)", status)
+        raise
 
-def offline_sql_fallback(question: str) -> tuple[str, str]:
-    q = question.lower()
-    if "top 5 states" in q or "ev registrations" in q:
-        return "SELECT state, SUM(vehicles) as total_evs FROM ev_state_registrations GROUP BY state ORDER BY total_evs DESC LIMIT 5;", "Retrieved top 5 states by total EV registrations."
-    elif "count total" in q or "total electric" in q:
-        return "SELECT COUNT(*) as total_vehicles FROM ev_state_registrations;", "Calculated total electric vehicle count across all records."
-    elif "category" in q or "categories" in q:
-        return "SELECT DISTINCT vehicle_category FROM ev_state_registrations LIMIT 3;", "Retrieved distinct vehicle categories."
-    elif "email" in q or "customer" in q:
-        return "SELECT customer_name, customer_email FROM dim_customers LIMIT 5;", "Retrieved customer records with PII redaction guard active."
-    else:
-        return "SELECT * FROM ev_state_registrations LIMIT 5;", "Executed general database retrieval query."
 
-# ------------------------------------------------------------------
-# API Endpoints
-# ------------------------------------------------------------------
+@app.get("/")
+def read_root():
+    return {"status": "online", "service": "Dwarpal OS API", "version": "1.0.0"}
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Dwarpal OS API"}
 
+
 @app.post("/api/query", response_model=QueryResponse)
 def query_endpoint(req: QueryRequest):
-    question = req.question.strip()
-    q_upper = question.upper()
+    question = (req.prompt or req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Request must include a non-empty prompt or question")
 
-    # 1. Pre-LLM Guardrail Check (Sub-millisecond blocking)
-    blocked_keywords = ["DROP", "DELETE", "TRUNCATE", "ALTER", "CREDIT CARD", "CREDIT_CARD", "PASSWORD"]
-    if any(kw in q_upper for kw in blocked_keywords):
-        entry_hash = log_audit_event(question, "BLOCKED", "BLOCKED", False)
+    question_verdict = check_question(question)
+    if not question_verdict.allowed:
+        try:
+            audit_hash = _audit(question, None, "BLOCKED", False)
+        except Exception as err:
+            raise HTTPException(status_code=500, detail=str(err)) from err
         return QueryResponse(
             success=False,
             question=question,
             status="BLOCKED",
-            rationale="Security Policy Violation: Prompt contained restricted operational keywords or unauthorized access patterns.",
-            insight="Security Guardrail Triggered: Destructive or restricted access query blocked.",
-            audit_hash=entry_hash
+            rationale=question_verdict.reason,
+            insight=question_verdict.reason,
+            audit_hash=audit_hash,
         )
 
-    # 2. SQL Generation via Gemini API with Fallback
-    sql = None
-    rationale = None
+    try:
+        generated = _generate_sql(question)
+    except Exception as err:
+        logger.exception("Gemini SQL generation failed")
+        try:
+            _audit(question, None, "ERROR", False)
+        except Exception:
+            logger.exception("Failed to audit Gemini error")
+        raise HTTPException(status_code=500, detail=str(err)) from err
 
     try:
-        models_to_try = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "gemini-3.8-flash"]
-        for model_name in models_to_try:
-            try:
-                sql, rationale = generate_sql_from_prompt(question, model_name=model_name)
-                if sql:
-                    break
-            except Exception as e:
-                print(f"⚠️ API attempt on {model_name} failed: {e}")
-                continue
-    except Exception:
-        pass
+        allowed_tables = load_allowed_tables(
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "schema.yaml")
+        )
+        verdict = validate_sql(generated.sql, allowed_tables)
+    except Exception as err:
+        logger.exception("SQL policy validation failed")
+        raise HTTPException(status_code=500, detail=str(err)) from err
 
-    if not sql:
-        print("ℹ️ Utilizing Offline SQL Engine Fallback...")
-        sql, rationale = offline_sql_fallback(question)
-
-    # 3. Post-Generation Policy Validation
-    verdict = validate_sql_query(sql)
-    if not verdict.is_allowed:
-        entry_hash = log_audit_event(question, sql, "BLOCKED", False)
+    if not verdict.allowed:
+        try:
+            audit_hash = _audit(question, generated.sql, "BLOCKED", False)
+        except Exception as err:
+            raise HTTPException(status_code=500, detail=str(err)) from err
         return QueryResponse(
             success=False,
             question=question,
-            sql=sql,
+            sql=generated.sql,
             status="BLOCKED",
             rationale=verdict.reason,
             insight=verdict.reason,
-            audit_hash=entry_hash
+            audit_hash=audit_hash,
         )
 
-    # 4. Database Execution
+    # Execute the SQL rewritten and row-limited by the deterministic policy engine.
+    sql = verdict.sql
     try:
-        columns, raw_rows = execute_read_only_query(sql)
-    except Exception as e:
-        entry_hash = log_audit_event(question, sql, "ERROR", False)
-        return QueryResponse(
-            success=False,
-            question=question,
-            sql=sql,
-            status="ERROR",
-            message=str(e),
-            audit_hash=entry_hash
-        )
-
-    # 5. PII Redaction Guard
-    redacted_tuples = redact_sql_results(raw_rows)
-    dict_results = [dict(zip(columns, row)) for row in redacted_tuples]
-
-    # 6. Cryptographic Audit Log Chaining
-    entry_hash = log_audit_event(question, sql, "ALLOWED", True)
+        columns, raw_rows = _execute_read_only_query(sql)
+        redacted_rows = redact_sql_results(raw_rows)
+        results = [dict(zip(columns, row)) for row in redacted_rows]
+        audit_hash = _audit(question, sql, "ALLOWED", True)
+    except Exception as err:
+        logger.exception("Database query execution failed")
+        try:
+            _audit(question, sql, "ERROR", False)
+        except Exception:
+            logger.exception("Failed to audit database error")
+        raise HTTPException(status_code=500, detail=str(err)) from err
 
     return QueryResponse(
         success=True,
         question=question,
         sql=sql,
-        rationale=rationale,
-        insight=rationale,
+        rationale=generated.rationale,
+        insight=generated.rationale,
         columns=columns,
-        rows=dict_results,
-        results=dict_results,
-        row_count=len(dict_results),
+        rows=results,
+        results=results,
+        row_count=len(results),
         status="ALLOWED",
-        audit_hash=entry_hash
+        audit_hash=audit_hash,
     )
 
 
@@ -225,22 +231,13 @@ def query_endpoint(req: QueryRequest):
 def get_audit_logs():
     try:
         from verify_chain import load_audit_chain, verify_audit_chain
+
         chain = load_audit_chain()
-        is_intact = verify_audit_chain()
         return {
-            "is_intact": is_intact,
+            "is_intact": verify_audit_chain(),
             "record_count": len(chain),
-            "chain": list(reversed(chain))
+            "chain": list(reversed(chain)),
         }
-    except Exception as e:
-        return {
-            "is_intact": False,
-            "record_count": 0,
-            "chain": [],
-            "error": str(e)
-        }
-
-
-@app.get("/")
-def read_root():
-    return {"status": "online", "service": "Dwarpal OS API", "version": "1.0.0"}
+    except Exception as err:
+        logger.exception("Could not load audit chain")
+        raise HTTPException(status_code=500, detail=str(err)) from err
