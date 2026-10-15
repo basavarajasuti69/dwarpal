@@ -8,17 +8,12 @@ import {
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'https://dwarpal-aqs2.onrender.com').replace(/\/$/, '');
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 type ResultRow = Record<string, unknown> | unknown[];
 
 const suggestions = [
-  { icon: '↗', label: 'Growth', question: 'Show me the top 5 states by EV registrations' },
-  { icon: '◉', label: 'Activity', question: 'How many users are active?' },
-  { icon: '⌁', label: 'Operations', question: 'Count the total number of blocked queries' },
+  { icon: '↗', label: 'EV adoption', question: 'Which 5 states had the most 4W EV registrations in 2024?' },
+  { icon: '◉', label: 'Charging network', question: 'Show states ranked by public chargers and fast chargers' },
+  { icon: '⌁', label: 'Commerce', question: 'What are the top 5 product categories by number of products?' },
 ];
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -31,7 +26,6 @@ export default function Home() {
   const [response, setResponse] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'table' | 'json' | 'sql' | 'chart'>('table');
-  const [history, setHistory] = useState<Message[]>([]);
   const [queryHistory, setQueryHistory] = useState<string[]>([]);
 
   const handleSubmit = async (event: React.FormEvent | string) => {
@@ -44,18 +38,15 @@ export default function Home() {
     setError(null);
     setResponse(null);
     setActiveTab('table');
-    const updatedHistory = [...history, { role: 'user' as const, content: query }];
-
     try {
       const res = await fetch(`${API_BASE}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: query, history: updatedHistory }),
+        body: JSON.stringify({ question: query }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'The query could not be completed.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `Request failed (${res.status}).`);
       setResponse(data);
-      setHistory([...updatedHistory, { role: 'assistant', content: data.insight || 'Query completed.' }]);
       setQueryHistory((previous) => [query, ...previous.filter((item) => item !== query)].slice(0, 6));
     } catch (err) {
       setError(err instanceof TypeError
@@ -140,9 +131,9 @@ export default function Home() {
       </aside>
 
       <main id="workspace" className="main-area">
-        <header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>Query studio</strong></div><div className="topbar-right"><div className="system-status"><span className="status-pulse" /> API <span className="status-divider">·</span> ONLINE</div><button className="help-button" aria-label="Help">?</button><div className="top-avatar">DW</div></div></header>
+        <header className="topbar"><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>Query studio</strong></div><div className="topbar-right"><div className="system-status"><span className="status-pulse" /> POLICY <span className="status-divider">·</span> GUARDED</div><a className="help-button" href="/audit" aria-label="View audit trail">?</a><div className="top-avatar">DW</div></div></header>
         <section className="workspace-content">
-          <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> SECURE BUSINESS INTELLIGENCE</div><h1>Ask your data<span className="heading-period">.</span></h1><p>Explore your business with natural language. Your data stays protected at every step.</p></div><div className="live-pill"><span className="status-pulse" /> GUARDRAILS ACTIVE</div></div>
+          <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> SECURE BUSINESS INTELLIGENCE</div><h1>Ask your data<span className="heading-period">.</span></h1><p>Explore your business with natural language. Queries are checked against your schema and read-only policy.</p></div><div className="live-pill"><span className="status-pulse" /> READ-ONLY POLICY</div></div>
 
           <form onSubmit={handleSubmit} className="query-composer">
             <div className="composer-top"><div className="composer-mark"><Icon>⌕</Icon></div><div className="composer-prompt"><span>QUERY YOUR WORKSPACE</span><span className="shortcut">NATURAL LANGUAGE <i>↗</i></span></div></div>
@@ -154,15 +145,15 @@ export default function Home() {
 
           {loading && <section className="loading-panel"><div className="loading-orb"><span /></div><div><strong>Working through your request</strong><p>Generating a safe query and retrieving your results…</p></div><div className="loading-steps"><span className="step-done">✓ Policy check</span><span className="step-active"><i /> Querying data</span></div></section>}
 
-          {error && <section className="error-panel"><div className="error-icon">!</div><div><span className="error-label">QUERY COULD NOT RUN</span><strong>{error}</strong><p>Check your connection or adjust the question, then try again.</p></div><button onClick={() => setError(null)} aria-label="Dismiss error">×</button></section>}
+          {error && <section className="error-panel"><div className="error-icon">!</div><div><span className="error-label">QUERY COULD NOT RUN</span><strong>{error}</strong><p>{error.includes('Gemini API quota') ? 'Try again after the quota reset, or configure a model and billing plan with available capacity.' : 'Check your connection or adjust the question, then try again.'}</p></div><button onClick={() => setError(null)} aria-label="Dismiss error">×</button></section>}
 
           {response && <section className="results-section">
-            {response.insight && <div className="insight-banner"><div className="insight-icon">✳</div><div><span>DWARPAL INSIGHT</span><p>{response.insight}</p></div><div className="verified-tag"><span>✓</span> VERIFIED</div></div>}
+            {response.insight && <div className="insight-banner"><div className="insight-icon">✳</div><div><span>GENERATION NOTE</span><p>{response.insight}</p></div><div className="verified-tag"><span>✓</span> POLICY CHECKED</div></div>}
             <div className="results-heading"><div><div className="section-kicker">QUERY RESULTS</div><h2>Your data, at a glance</h2></div><button className="export-button" onClick={downloadCSV} disabled={!results.length}>↓ <span>Export CSV</span></button></div>
             <div className="metric-strip"><div className="metric-card"><span>ROWS RETURNED</span><strong>{response.row_count ?? results.length}</strong><small><i className="metric-dot" /> Live result set</small></div><div className="metric-card"><span>FIELDS</span><strong>{columns.length}</strong><small>Columns in this view</small></div><div className="metric-card"><span>EXECUTION STATUS</span><strong className="metric-success">{response.status === 'BLOCKED' ? 'Blocked' : 'Complete'}</strong><small><i className="metric-dot" /> Policy checked</small></div></div>
-            <div className="results-card"><div className="results-toolbar"><div className="tab-list" role="tablist" aria-label="Result view">{([['table', 'Data grid'], ['chart', 'Visualize'], ['json', 'Raw JSON'], ...(response.sql ? [['sql', 'SQL'] as string[]] : [])] as string[][]).map(([id, label]) => <button role="tab" aria-selected={activeTab === id} key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`result-tab ${activeTab === id ? 'selected' : ''}`}>{label}</button>)}</div><div className="result-meta"><span className="meta-dot" /> {response.source === 'cache' ? 'Cached result' : 'Verified query'}</div></div>
+            <div className="results-card"><div className="results-toolbar"><div className="tab-list" role="tablist" aria-label="Result view">{([['table', 'Data grid'], ['chart', 'Visualize'], ['json', 'Raw JSON'], ...(response.sql ? [['sql', 'SQL'] as string[]] : [])] as string[][]).map(([id, label]) => <button role="tab" aria-selected={activeTab === id} key={id} onClick={() => setActiveTab(id as typeof activeTab)} className={`result-tab ${activeTab === id ? 'selected' : ''}`}>{label}</button>)}</div><div className="result-meta"><span className="meta-dot" /> {response.source === 'cache' ? 'Cached result' : 'Policy-approved SQL'}</div></div>
               <div className="results-body">{activeTab === 'table' && renderTable()}{activeTab === 'chart' && renderChart()}{activeTab === 'json' && <pre className="code-view">{JSON.stringify(results, null, 2)}</pre>}{activeTab === 'sql' && <div className="sql-view"><div className="code-label">EXECUTED SQL <span>READ ONLY</span></div><pre className="code-view">{response.sql}</pre></div>}</div>
-              <div className="results-foot"><span>Results are PII screened</span><span>{response.audit_hash ? `AUDIT ${response.audit_hash.slice(0, 12)}…` : 'SECURE SESSION'}</span></div>
+              <div className="results-foot"><span>Selected result patterns redacted</span><span>{response.audit_hash ? `AUDIT ${response.audit_hash.slice(0, 12)}…` : 'QUERY SESSION'}</span></div>
             </div>
           </section>}
           <footer className="page-footer"><span>DWARPAL OS <i>·</i> SECURE ANALYTICS</span><span>BUILT FOR CLARITY. DESIGNED FOR TRUST.</span></footer>

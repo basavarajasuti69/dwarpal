@@ -171,6 +171,14 @@ def query_endpoint(req: QueryRequest):
             _audit(question, None, "ERROR", False)
         except Exception:
             logger.exception("Failed to audit Gemini error")
+        if getattr(err, "status_code", None) == 429 or "RESOURCE_EXHAUSTED" in str(err) or "429" in str(err):
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Gemini API quota is exhausted for the configured model. Check the Google AI quota/billing page, "
+                    "wait for the quota reset, or configure a model with available quota."
+                ),
+            ) from err
         raise HTTPException(status_code=500, detail=str(err)) from err
 
     try:
@@ -233,8 +241,9 @@ def get_audit_logs():
         from verify_chain import load_audit_chain, verify_audit_chain
 
         chain = load_audit_chain()
+        intact = verify_audit_chain(chain)
         return {
-            "is_intact": verify_audit_chain(),
+            "is_intact": intact,
             "record_count": len(chain),
             "chain": list(reversed(chain)),
         }

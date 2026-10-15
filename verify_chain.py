@@ -6,39 +6,49 @@ from audit_chain import compute_entry_hash, GENESIS_HASH
 load_dotenv()
 DB_URL = os.getenv("NEON_DB_URL")
 
-def verify_audit_chain():
-    """Traverses the audit table and verifies SHA-256 hash continuity."""
+def load_audit_chain():
+    """Return audit entries in insertion order for the API and verifier."""
+    if not DB_URL:
+        raise RuntimeError("NEON_DB_URL is not configured")
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, user_prompt, generated_sql, status, pii_redacted, prev_hash, entry_hash FROM audit_log_chain ORDER BY id ASC;")
+            cur.execute("SELECT id, timestamp, user_prompt, generated_sql, status, pii_redacted, prev_hash, entry_hash FROM audit_log_chain ORDER BY id ASC;")
             rows = cur.fetchall()
+    return [
+        {
+            "id": row[0],
+            "timestamp": row[1].isoformat() if row[1] else None,
+            "user_prompt": row[2],
+            "generated_sql": row[3],
+            "status": row[4],
+            "pii_redacted": row[5],
+            "prev_hash": row[6],
+            "entry_hash": row[7],
+        }
+        for row in rows
+    ]
+
+
+def verify_audit_chain(entries=None):
+    """Verify SHA-256 hash continuity for the audit entries."""
+    rows = load_audit_chain() if entries is None else entries
 
     if not rows:
-        print("ℹ️ Audit log chain is empty.")
         return True
 
     expected_prev = GENESIS_HASH
     for row in rows:
-        entry_id, user_prompt, generated_sql, status, pii_redacted, prev_hash, entry_hash = row
-
-        # Check hash linkage
-        if prev_hash != expected_prev:
-            print(f"❌ TAMPER DETECTED at ID {entry_id}: Previous hash mismatch!")
-            print(f"   Expected: {expected_prev}")
-            print(f"   Found:    {prev_hash}")
+        if row["prev_hash"] != expected_prev:
             return False
 
-        # Re-compute hash
-        recalculated_hash = compute_entry_hash(prev_hash, user_prompt, generated_sql, status, pii_redacted)
-        if recalculated_hash != entry_hash:
-            print(f"❌ TAMPER DETECTED at ID {entry_id}: Data modified!")
-            print(f"   Stored Hash:      {entry_hash}")
-            print(f"   Recalculated:     {recalculated_hash}")
+        recalculated_hash = compute_entry_hash(
+            row["prev_hash"], row["user_prompt"], row["generated_sql"],
+            row["status"], row["pii_redacted"],
+        )
+        if recalculated_hash != row["entry_hash"]:
             return False
 
-        expected_prev = entry_hash
-
-    print(f"✅ Audit log chain verified successfully. ({len(rows)} records verified, integrity intact)")
+        expected_prev = row["entry_hash"]
     return True
 
 if __name__ == "__main__":
