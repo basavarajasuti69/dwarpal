@@ -59,8 +59,10 @@ class QueryResponse(BaseModel):
     question: str
     sql: Optional[str] = None
     rationale: Optional[str] = None
+    insight: Optional[str] = None
     columns: List[str] = []
-    rows: List[List[Any]] = []
+    rows: List[Any] = []
+    results: List[Any] = []
     row_count: int = 0
     status: str  # 'ALLOWED', 'BLOCKED', 'ERROR'
     message: Optional[str] = None
@@ -209,7 +211,7 @@ def process_query(req: QueryRequest):
 
     # 5. Apply PII Redaction Guard to query output
     redacted_tuples = redact_sql_results(raw_rows)
-    formatted_rows = [list(row) for row in redacted_tuples]
+    dict_results = [dict(zip(columns, row)) for row in redacted_tuples]
 
     # 6. Append entry to tamper-evident audit chain
     entry_hash = log_audit_event(question, verdict.sql, 'ALLOWED', True)
@@ -219,9 +221,11 @@ def process_query(req: QueryRequest):
         question=question,
         sql=verdict.sql,
         rationale=rationale,
+        insight=rationale,
         columns=columns,
-        rows=formatted_rows,
-        row_count=len(formatted_rows),
+        rows=dict_results,
+        results=dict_results,
+        row_count=len(dict_results),
         status="ALLOWED",
         audit_hash=entry_hash
     )
