@@ -7,7 +7,7 @@ load_dotenv()
 ALLOWED_TABLES = [
     "dim_customers", "dim_products", "dim_sellers", "dim_date",
     "fact_order_items", "fact_payments", "fact_reviews",
-    "ev_state_registrations", "ev_charging_stations", "synthetic_customers",
+    "ev_state_registrations", "ev_charging_stations", "synthetic_customers_safe",
 ]
 
 STATEMENTS = [

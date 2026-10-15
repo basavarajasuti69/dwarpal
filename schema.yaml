@@ -186,9 +186,9 @@ tables:
   - name: has_comment
     type: boolean
     description: ''
-- name: synthetic_customers
-  description: SYNTHETIC test customers with fake personal identifiers (email, mobile,
-    Aadhaar, PAN, UPI), used to test the PII guard.
+- name: synthetic_customers_safe
+  description: 'SYNTHETIC customers, masked view: identifiers are reduced to their
+    last 4 digits. Raw PII is not available.'
   columns:
   - name: id
     type: integer
@@ -196,26 +196,17 @@ tables:
   - name: full_name
     type: text
     description: ''
-  - name: email
-    type: text
-    description: ''
-  - name: mobile
-    type: text
-    description: ''
-  - name: aadhaar
-    type: text
-    description: ''
-  - name: pan
-    type: text
-    description: ''
-  - name: upi_id
-    type: text
-    description: ''
   - name: city
     type: text
     description: ''
   - name: signup_year
     type: integer
+    description: ''
+  - name: mobile_last4
+    type: text
+    description: ''
+  - name: aadhaar_last4
+    type: text
     description: ''
 examples:
 - domain: Olist
@@ -254,5 +245,5 @@ examples:
   sql: SELECT SUM(public_chargers) FROM ev_charging_stations;
 - domain: Synthetic PII
   question: How many synthetic customers are in each city?
-  sql: SELECT city, COUNT(*) FROM synthetic_customers GROUP BY city ORDER BY COUNT(*)
-    DESC;
+  sql: SELECT city, COUNT(*) FROM synthetic_customers_safe GROUP BY city ORDER BY
+    COUNT(*) DESC;
