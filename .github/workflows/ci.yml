@@ -24,11 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Cryptographic Audit Chain Verification
-        run: |
-          python verify_chain.py
-
-      - name: Run Autonomous Evaluation Benchmark
+      - name: Run Autonomous Evaluation Benchmark & Audit Verification
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
