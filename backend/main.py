@@ -1,25 +1,48 @@
 import os
 import sys
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import psycopg
+import time
+from typing import Optional, List, Any, Dict
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import psycopg
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure parent root directory is in sys.path to import root modules
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from audit_chain import log_audit_event, init_audit_db
+from verify_chain import verify_audit_chain
 from policy import check_question, load_allowed_tables, validate_sql
 from pii_guard import redact_sql_results
-from audit import log_security_event
-from cache import get_cached_query, set_cached_query
 
-load_dotenv()
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
-app = FastAPI(title="Dwarpal Autonomous AI Analytics API", version="2.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize audit log table on startup
+    try:
+        init_audit_db()
+    except Exception as e:
+        print(f"⚠️ Audit DB initialization warning: {e}")
+    yield
 
+app = FastAPI(
+    title="Dwarpal OS Security & Analytics API",
+    version="2.0.0",
+    description="Enterprise-grade secure text-to-SQL API with PII guardrails and tamper-evident audit log.",
+    lifespan=lifespan
+)
+
+# CORS setup for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,180 +51,169 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
 class QueryRequest(BaseModel):
-    question: str
-    history: Optional[List[ChatMessage]] = []
+    question: str = Field(..., example="Show top 5 customers by sales")
 
-# Pydantic models for Multi-Agent Orchestration
-class PlannerResponse(BaseModel):
+class QueryResponse(BaseModel):
+    success: bool
+    question: str
+    sql: Optional[str] = None
+    rationale: Optional[str] = None
+    columns: List[str] = []
+    rows: List[List[Any]] = []
+    row_count: int = 0
+    status: str  # 'ALLOWED', 'BLOCKED', 'ERROR'
+    message: Optional[str] = None
+    audit_hash: Optional[str] = None
+
+class SqlGeneration(BaseModel):
     sql: str
     rationale: str
-    recommended_chart: str  # 'bar', 'line', 'pie', 'metric'
 
-class CriticResponse(BaseModel):
-    is_approved: bool
-    critique_feedback: str
-    corrected_sql: Optional[str] = None
-
-def get_readonly_url():
-    admin_url = os.environ["NEON_DB_URL"]
+def get_readonly_url() -> str:
+    admin_url = os.environ.get("NEON_DB_URL")
+    reader_pw = os.environ.get("DWARPAL_READER_PASSWORD")
+    if not admin_url or not reader_pw:
+        raise ValueError("NEON_DB_URL and DWARPAL_READER_PASSWORD must be set in environment")
     parsed = urlparse(admin_url)
-    netloc = f"dwarpal_reader:{os.environ['DWARPAL_READER_PASSWORD']}@{parsed.hostname}"
+    netloc = f"dwarpal_reader:{reader_pw}@{parsed.hostname}"
     if parsed.port:
         netloc += f":{parsed.port}"
     return urlunparse(parsed._replace(netloc=netloc))
 
-@app.post("/api/query")
-def process_query(req: QueryRequest):
-    # 1. Check Cache
-    cached_data = get_cached_query(req.question)
-    if cached_data:
-        return {
-            "status": "success", 
-            "source": "cache", 
-            "question": req.question, 
-            "results": cached_data, 
-            "chart": "bar",
-            "insight": "Loaded instantly from execution cache."
-        }
+def load_schema_text() -> str:
+    schema_path = ROOT_DIR / "schema.yaml"
+    if not schema_path.exists():
+        return "No schema.yaml found."
+    return schema_path.read_text()
 
-    # 2. Policy Guardrail Check
-    policy_res = check_question(req.question)
-    if not policy_res.allowed:
-        log_security_event("POLICY_BLOCKED", req.question, reason=policy_res.reason)
-        raise HTTPException(status_code=403, detail=policy_res.reason)
-
-    allowed_tables = load_allowed_tables()
+def generate_sql_with_gemini(question: str, schema_text: str) -> SqlGeneration:
     client = genai.Client()
-
-    # Build conversation context string if history exists
-    context_str = ""
-    if req.history:
-        context_str = "\n".join([f"{msg.role.upper()}: {msg.content}" for msg in req.history[-4:]])
-
-    # 3. PLANNER AGENT
-    planner_prompt = f"""
-    You are the Planner Agent. Your job is to analyze the user's question and schema, then draft a precise PostgreSQL query.
-    Schema: {allowed_tables}
-    Recent Conversation History:
-    {context_str}
-    User Question: {req.question}
-    """
-
-    try:
-        planner_res = client.models.generate_content(
-            model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=planner_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=PlannerResponse,
-                temperature=0.0
-            ),
-        )
-        draft_sql = planner_res.parsed.sql
-        chart_type = planner_res.parsed.recommended_chart
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Planner Agent failed: {str(e)}")
-
-    # 4. CRITIC AGENT (Auditing the draft SQL)
-    critic_prompt = f"""
-    You are the Critic Agent, an expert database administrator and security auditor.
-    Review this draft SQL query for safety, syntax validity against PostgreSQL, and adherence to allowed tables ({allowed_tables}).
-    Draft SQL: {draft_sql}
-    User Question: {req.question}
+    prompt = f"""
+    You are an expert PostgreSQL data analyst.
+    Here is the database schema and some examples:
+    {schema_text}
     
-    If the SQL is valid and safe, set is_approved to true. If there are syntax errors or risks, set is_approved to false and provide corrected_sql.
+    Generate a highly accurate PostgreSQL query to answer the user's question.
+    Ensure you only query the tables provided.
+    
+    User Question: {question}
     """
+    primary_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    fallback_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-2.0-flash")
+    models_to_try = [primary_model] if primary_model == fallback_model else [primary_model, fallback_model]
 
-    try:
-        critic_res = client.models.generate_content(
-            model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=critic_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=CriticResponse,
-                temperature=0.0
-            ),
-        )
-        critic_output = critic_res.parsed
-        sql_query = critic_output.corrected_sql if not critic_output.is_approved and critic_output.corrected_sql else draft_sql
-    except Exception:
-        sql_query = draft_sql
-
-    # 5. SQL Guardrail Validation
-    sql_validation = validate_sql(sql_query, allowed_tables)
-    if not sql_validation.allowed:
-        log_security_event("POLICY_BLOCKED", req.question, sql_query, sql_validation.reason)
-        raise HTTPException(status_code=403, detail=sql_validation.reason)
-
-    # 6. Autonomous SQL Self-Correction Execution Loop
-    max_retries = 2
-    raw_results = None
-    last_db_error = None
-
-    for attempt in range(max_retries):
+    for model_name in models_to_try:
         try:
-            with psycopg.connect(get_readonly_url()) as conn:
-                with conn.cursor() as cursor:
-                    wrapped_query = f"SELECT * FROM ({sql_query.rstrip(';')}) AS sub LIMIT 1000"
-                    cursor.execute(wrapped_query)
-                    raw_results = cursor.fetchall()
-            break 
-        except Exception as db_err:
-            last_db_error = str(db_err)
-            if attempt < max_retries - 1:
-                correction_prompt = f"""
-                The previous SQL query generated for the question '{req.question}' failed to execute on PostgreSQL.
-                Failed SQL: {sql_query}
-                Database Error: {last_db_error}
-                Please fix the SQL query and return the corrected JSON response.
-                """
-                try:
-                    retry_response = client.models.generate_content(
-                        model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-                        contents=correction_prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=PlannerResponse,
-                            temperature=0.0
-                        ),
-                    )
-                    sql_query = retry_response.parsed.sql
-                    chart_type = retry_response.parsed.recommended_chart
-                except Exception:
-                    break
-            else:
-                log_security_event("SQL_ERROR", req.question, sql_query, last_db_error)
-                raise HTTPException(status_code=500, detail=f"Database execution error: {last_db_error}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=SqlGeneration,
+                    temperature=0.0
+                ),
+            )
+            return response.parsed
+        except Exception as e:
+            if model_name == models_to_try[-1]:
+                raise e
+            print(f"⚠️ Model {model_name} failed. Falling back to {fallback_model}...")
 
-    # 7. PII Redaction & Caching
-    safe_results = redact_sql_results(raw_results)
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "service": "Dwarpal OS Security Engine"}
 
-    # 8. AI Executive Insight Generation
-    insight_text = "Query successfully executed and verified by autonomous agent."
-    try:
-        insight_prompt = f"Given the user question '{req.question}' and query results sample {str(safe_results[:5])}, write a concise 1-sentence executive business insight."
-        insight_res = client.models.generate_content(
-            model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=insight_prompt,
+@app.get("/api/audit/verify")
+def verify_audit_endpoint():
+    """Endpoint for frontend/compliance dashboard to verify cryptographic chain integrity."""
+    intact = verify_audit_chain()
+    return {"chain_integrity_intact": intact}
+
+@app.post("/api/query", response_model=QueryResponse)
+def process_query(req: QueryRequest):
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    # 1. Policy pre-check on user input
+    pre = check_question(question)
+    if not pre.allowed:
+        entry_hash = log_audit_event(question, None, 'BLOCKED', False)
+        return QueryResponse(
+            success=False,
+            question=question,
+            status="BLOCKED",
+            message=f"Blocked by policy: {pre.reason}",
+            audit_hash=entry_hash
         )
-        if insight_res.text:
-            insight_text = insight_res.text.strip()
-    except Exception:
-        pass
 
-    set_cached_query(req.question, safe_results)
+    # 2. LLM SQL Generation
+    try:
+        schema_text = load_schema_text()
+        generated = generate_sql_with_gemini(question, schema_text)
+        sql = generated.sql
+        rationale = generated.rationale
+    except Exception as err:
+        entry_hash = log_audit_event(question, None, 'ERROR', False)
+        return QueryResponse(
+            success=False,
+            question=question,
+            status="ERROR",
+            message=f"Failed to generate SQL: {str(err)}",
+            audit_hash=entry_hash
+        )
 
-    return {
-        "status": "success",
-        "source": "database",
-        "question": req.question,
-        "sql": sql_query,
-        "chart": chart_type,
-        "results": safe_results,
-        "insight": insight_text
-    }
+    # 3. Policy validation on generated SQL
+    allowed_tables = load_allowed_tables()
+    verdict = validate_sql(sql, allowed_tables)
+    if not verdict.allowed:
+        entry_hash = log_audit_event(question, sql, 'BLOCKED', False)
+        return QueryResponse(
+            success=False,
+            question=question,
+            sql=sql,
+            rationale=rationale,
+            status="BLOCKED",
+            message=f"Blocked by SQL policy: {verdict.reason}",
+            audit_hash=entry_hash
+        )
+
+    # 4. Database execution using restricted read-only role
+    try:
+        readonly_url = get_readonly_url()
+        with psycopg.connect(readonly_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute(verdict.sql)
+                raw_rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description] if cur.description else []
+    except Exception as db_err:
+        entry_hash = log_audit_event(question, verdict.sql, 'ERROR', False)
+        return QueryResponse(
+            success=False,
+            question=question,
+            sql=verdict.sql,
+            rationale=rationale,
+            status="ERROR",
+            message=f"Database execution error: {str(db_err)}",
+            audit_hash=entry_hash
+        )
+
+    # 5. Apply PII Redaction Guard to query output
+    redacted_tuples = redact_sql_results(raw_rows)
+    formatted_rows = [list(row) for row in redacted_tuples]
+
+    # 6. Append entry to tamper-evident audit chain
+    entry_hash = log_audit_event(question, verdict.sql, 'ALLOWED', True)
+
+    return QueryResponse(
+        success=True,
+        question=question,
+        sql=verdict.sql,
+        rationale=rationale,
+        columns=columns,
+        rows=formatted_rows,
+        row_count=len(formatted_rows),
+        status="ALLOWED",
+        audit_hash=entry_hash
+    )
