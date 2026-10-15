@@ -186,6 +186,37 @@ tables:
   - name: has_comment
     type: boolean
     description: ''
+- name: synthetic_customers
+  description: SYNTHETIC test customers with fake personal identifiers (email, mobile,
+    Aadhaar, PAN, UPI), used to test the PII guard.
+  columns:
+  - name: id
+    type: integer
+    description: ''
+  - name: full_name
+    type: text
+    description: ''
+  - name: email
+    type: text
+    description: ''
+  - name: mobile
+    type: text
+    description: ''
+  - name: aadhaar
+    type: text
+    description: ''
+  - name: pan
+    type: text
+    description: ''
+  - name: upi_id
+    type: text
+    description: ''
+  - name: city
+    type: text
+    description: ''
+  - name: signup_year
+    type: integer
+    description: ''
 examples:
 - domain: Olist
   question: How many total customers are there?
@@ -221,3 +252,7 @@ examples:
 - domain: India EV
   question: What is the total number of public chargers across all states?
   sql: SELECT SUM(public_chargers) FROM ev_charging_stations;
+- domain: Synthetic PII
+  question: How many synthetic customers are in each city?
+  sql: SELECT city, COUNT(*) FROM synthetic_customers GROUP BY city ORDER BY COUNT(*)
+    DESC;
