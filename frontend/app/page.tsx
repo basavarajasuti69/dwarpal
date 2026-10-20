@@ -55,6 +55,27 @@ const suggestions = [
   },
 ];
 
+const navItems = [
+  {
+    href: '/',
+    label: 'Query Studio',
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/audit',
+    label: 'Audit Chain',
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+];
+
 export default function Home() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
@@ -138,8 +159,8 @@ export default function Home() {
           <div className="w-12 h-12 rounded-full bg-[var(--canvas-subtle)] border border-[var(--border-light)] flex items-center justify-center text-[var(--ink-muted)] mb-3 text-lg">
             ∅
           </div>
-          <h4 className="text-sm font-semibold text-[var(--ink)]">No rows returned</h4>
-          <p className="text-xs text-[var(--ink-muted)] mt-1 max-w-sm">
+          <h4 className="heading-sm text-[var(--ink)]">No rows returned</h4>
+          <p className="micro text-[var(--ink-muted)] mt-1 max-w-sm">
             The database executed this query safely, but no records matched the given criteria.
           </p>
         </div>
@@ -198,8 +219,8 @@ export default function Home() {
           <div className="w-12 h-12 rounded-full bg-[var(--canvas-subtle)] border border-[var(--border-light)] flex items-center justify-center text-[var(--ink-muted)] mb-3 text-lg">
             📈
           </div>
-          <h4 className="text-sm font-semibold text-[var(--ink)]">Visualization unavailable</h4>
-          <p className="text-xs text-[var(--ink-muted)] mt-1 max-w-sm">
+          <h4 className="heading-sm text-[var(--ink)]">Visualization unavailable</h4>
+          <p className="micro text-[var(--ink-muted)] mt-1 max-w-sm">
             Charting requires at least two columns with numeric values in the result set.
           </p>
         </div>
@@ -221,10 +242,8 @@ export default function Home() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <span className="text-[11px] font-semibold tracking-wider text-[var(--ink-muted)] uppercase">
-              Distribution View
-            </span>
-            <h4 className="text-sm font-medium text-[var(--ink)] mt-0.5">
+            <span className="micro-cap text-[var(--ink-muted)]">Distribution View</span>
+            <h4 className="heading-sm text-[var(--ink)] mt-0.5">
               {columns[0]} vs. {columns[1]}
             </h4>
           </div>
@@ -237,11 +256,11 @@ export default function Home() {
           <ResponsiveContainer width="100%" height="100%">
             {isLine ? (
               <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke="#eceae4" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: '#64748d', fontSize: 11 }}
-                  axisLine={{ stroke: '#e2e8f0' }}
+                  axisLine={{ stroke: '#eceae4' }}
                   tickLine={false}
                 />
                 <YAxis
@@ -251,10 +270,10 @@ export default function Home() {
                 />
                 <RechartsTooltip
                   contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    backgroundColor: '#f7f4ed',
+                    border: '1px solid #eceae4',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(13,37,61,0.08)',
                     fontSize: 12,
                     color: '#0d253d',
                   }}
@@ -272,11 +291,11 @@ export default function Home() {
               </LineChart>
             ) : (
               <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke="#eceae4" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: '#64748d', fontSize: 11 }}
-                  axisLine={{ stroke: '#e2e8f0' }}
+                  axisLine={{ stroke: '#eceae4' }}
                   tickLine={false}
                 />
                 <YAxis
@@ -286,10 +305,10 @@ export default function Home() {
                 />
                 <RechartsTooltip
                   contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    backgroundColor: '#f7f4ed',
+                    border: '1px solid #eceae4',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(13,37,61,0.08)',
                     fontSize: 12,
                     color: '#0d253d',
                   }}
@@ -311,90 +330,87 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex flex-col bg-[var(--canvas)] text-[var(--ink)]">
-      {/* Stripe Signature Atmospheric Gradient Mesh */}
+      {/* Stripe Signature Atmospheric Gradient Mesh (upper third) */}
       <div className="mesh-backdrop" />
 
-      {/* Floating Top Nav (Stripe & Lovable Hybrid) */}
-      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/75 border-b border-[var(--border-light)] transition-all">
+      {/* Floating Top Nav */}
+      <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-[var(--canvas)]/80 border-b border-[var(--border-light)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-15 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2.5 group text-decoration-none">
-              <div className="w-8 h-8 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center font-bold text-sm shadow-[0_2px_8px_rgba(83,58,253,0.3)]">
+              <div className="w-8 h-8 rounded-[8px] bg-[var(--ink)] text-white flex items-center justify-center font-semibold text-sm">
                 <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-base tracking-tight text-[var(--ink)]">Dwarpal</span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-[var(--primary-subdued)] text-[var(--primary-deep)]">OS</span>
+                  <span className="heading-sm text-[var(--ink)]">Dwarpal</span>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-[var(--primary-subdued)] text-[var(--primary-deep)]">
+                    OS
+                  </span>
                 </div>
-                <span className="text-[9px] font-semibold tracking-wider text-[var(--ink-muted)] uppercase">
-                  Guarded Intelligence
-                </span>
+                <span className="micro-cap text-[var(--ink-muted)]">Guarded Intelligence</span>
               </div>
             </Link>
 
             <nav className="hidden md:flex items-center gap-1 pl-4 border-l border-[var(--border-light)]">
-              <Link href="/" className="btn-ghost-pill active">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Query Studio
-              </Link>
-              <Link href="/audit" className="btn-ghost-pill">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Audit Chain
-              </Link>
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`btn-ghost-pill ${item.href === '/' ? 'active' : ''}`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50/80 border border-emerald-200/60 text-emerald-800 text-[11px] font-semibold">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--emerald-subtle)] border border-[var(--emerald-border)] text-emerald-800 text-[11px] font-semibold">
               <span className="pulse-emerald" />
               <span>Read-Only Policy Enforced</span>
             </div>
 
-            <a
+            <Link
               href="/audit"
-              className="text-xs text-[var(--ink-secondary)] hover:text-[var(--primary)] font-medium flex items-center gap-1 py-1 px-2.5 rounded-full border border-[var(--border-light)] hover:border-[var(--primary)] transition-all bg-white"
+              className="text-xs text-[var(--ink-secondary)] hover:text-[var(--primary)] font-medium flex items-center gap-1 py-1 px-2.5 rounded-full border border-[var(--border-light)] hover:border-[var(--primary)] transition-all"
             >
               <span>Audit logs</span>
               <span className="text-[11px]">→</span>
-            </a>
+            </Link>
           </div>
         </div>
       </header>
 
       {/* Main Workspace Container */}
-      <main className="relative z-10 flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 pt-10 pb-20">
-
-        {/* Hero Editorial Section (Lovable warmth + Stripe editorial precision) */}
-        <div className="text-center max-w-2xl mx-auto mb-9">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[var(--border-light)] shadow-xs mb-4">
-            <span className="w-2 h-2 rounded-full bg-[var(--primary)]" />
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-secondary)]">
+      <main className="relative z-10 flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 pt-12 pb-20">
+        {/* Editorial Hero (Stripe display tier + Lovable cream canvas) */}
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--canvas-card)] border border-[var(--border-light)] mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />
+            <span className="micro-cap text-[var(--ink-secondary)]">
               Deterministic Guardrails &amp; SQL Synthesis
             </span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-[-0.035em] text-[var(--ink)] leading-[1.12]">
+          <h1 className="display-hero text-[var(--ink)]">
             Ask your business data with verifiable trust.
           </h1>
 
-          <p className="mt-3.5 text-sm sm:text-base text-[var(--ink-muted)] leading-relaxed font-normal">
+          <p className="mt-4 body-md sm:body-lg text-[var(--ink-muted)]">
             Natural language queries translated to read-only SQL, strictly verified against your schema whitelist and recorded in an immutable audit chain.
           </p>
         </div>
 
-        {/* AI Query Composer (Lovable Warm Box + Stripe Pill Actions) */}
-        <div className="composer-box p-3.5 sm:p-5 mb-8">
+        {/* AI Query Composer */}
+        <div className="composer-box p-3.5 sm:p-5 mb-10">
           <form onSubmit={handleSubmit}>
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-[var(--border-light)]">
               <div className="flex items-center gap-2 text-xs font-medium text-[var(--ink-secondary)]">
-                <span className="w-5 h-5 rounded-md bg-[var(--primary-subdued)] text-[var(--primary-deep)] flex items-center justify-center text-xs">
+                <span className="w-5 h-5 rounded-[6px] bg-[var(--primary-subdued)] text-[var(--primary-deep)] flex items-center justify-center text-xs">
                   ✨
                 </span>
                 <span>Natural Language Query</span>
@@ -420,7 +436,7 @@ export default function Home() {
               }}
               placeholder="e.g., Which 5 states had the most 4W EV registrations in 2024?"
               rows={3}
-              className="w-full text-base sm:text-lg text-[var(--ink)] placeholder-[var(--ink-faint)] bg-transparent border-0 outline-none resize-none leading-relaxed"
+              className="w-full body-lg text-[var(--ink)] placeholder-[var(--ink-faint)] bg-transparent border-0 outline-none resize-none leading-relaxed"
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border-light)] mt-1">
@@ -471,16 +487,12 @@ export default function Home() {
           </form>
         </div>
 
-        {/* Suggestion Prompts Gallery (Lovable Card Grid) */}
+        {/* Suggestion Prompts Gallery (Lovable card grid) */}
         {!response && !error && !loading && (
-          <div className="mb-12">
+          <div className="mb-14">
             <div className="flex items-center justify-between mb-3.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-muted)]">
-                Sample Questions to Explore
-              </span>
-              <span className="text-xs text-[var(--ink-faint)]">
-                Click any prompt to run immediately
-              </span>
+              <span className="micro-cap text-[var(--ink-muted)]">Sample Questions to Explore</span>
+              <span className="micro text-[var(--ink-faint)]">Click any prompt to run immediately</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -488,10 +500,10 @@ export default function Home() {
                 <button
                   key={item.category}
                   onClick={() => handleSubmit(item.question)}
-                  className="craft-card craft-card-interactive text-left p-4 flex flex-col justify-between group cursor-pointer transition-all"
+                  className="craft-card craft-card-interactive text-left p-4 flex flex-col justify-between group cursor-pointer"
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2.5">
                       <span className="pill-tag pill-tag-neutral text-[10px]">
                         {item.icon} {item.category}
                       </span>
@@ -499,11 +511,11 @@ export default function Home() {
                         ↗
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-[var(--ink)] leading-snug group-hover:text-[var(--primary)] transition-colors">
+                    <p className="body-md font-[400] text-[var(--ink)] leading-snug group-hover:text-[var(--primary)] transition-colors">
                       {item.question}
                     </p>
                   </div>
-                  <p className="text-xs text-[var(--ink-muted)] mt-2.5 line-clamp-1">
+                  <p className="micro text-[var(--ink-muted)] mt-2.5 line-clamp-1">
                     {item.description}
                   </p>
                 </button>
@@ -512,8 +524,8 @@ export default function Home() {
 
             {/* Query History Bar */}
             {queryHistory.length > 0 && (
-              <div className="mt-8 pt-6 border-t border-[var(--border-light)]">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-muted)] block mb-2.5">
+              <div className="mt-10 pt-6 border-t border-[var(--border-light)]">
+                <span className="micro-cap text-[var(--ink-muted)] block mb-2.5">
                   Recent Queries in Session
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -521,7 +533,7 @@ export default function Home() {
                     <button
                       key={`${item}-${idx}`}
                       onClick={() => handleSubmit(item)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-[var(--border-light)] text-[var(--ink-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--canvas-card)] border border-[var(--border-light)] text-[var(--ink-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all cursor-pointer"
                     >
                       <span className="text-[10px] text-[var(--ink-faint)]">↺</span>
                       <span className="truncate max-w-xs">{item}</span>
@@ -535,7 +547,7 @@ export default function Home() {
 
         {/* Loading Multi-Step Progress State */}
         {loading && (
-          <div className="craft-card p-6 mb-8 bg-white/90">
+          <div className="craft-card p-6 mb-8">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-[var(--primary-subdued)] border border-indigo-200 flex items-center justify-center text-[var(--primary)]">
                 <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -544,10 +556,8 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-[var(--ink)]">
-                  Executing guarded query pipeline
-                </h3>
-                <p className="text-xs text-[var(--ink-muted)] mt-0.5">
+                <h3 className="heading-sm text-[var(--ink)]">Executing guarded query pipeline</h3>
+                <p className="micro text-[var(--ink-muted)] mt-0.5">
                   Verifying question against schema, generating read-only SQL, and enforcing policy guardrails…
                 </p>
               </div>
@@ -572,24 +582,20 @@ export default function Home() {
 
         {/* Error / Blocked Alert */}
         {error && (
-          <div className="craft-card p-5 mb-8 border-ruby-200 bg-rose-50/70 border">
+          <div className="craft-card p-5 mb-8 border-ruby-200 bg-[var(--ruby-subtle)]">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-rose-100 text-[var(--ruby)] flex items-center justify-center shrink-0 font-bold text-sm">
                 !
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="pill-tag pill-tag-ruby text-[10px]">
-                    POLICY REJECTED / ERROR
-                  </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="pill-tag pill-tag-ruby text-[10px]">Policy Rejected / Error</span>
                   <span className="text-xs text-rose-800 font-semibold">
                     Request could not proceed
                   </span>
                 </div>
-                <p className="text-sm font-medium text-rose-900 mt-1.5">
-                  {error}
-                </p>
-                <p className="text-xs text-rose-700 mt-1">
+                <p className="body-md font-[400] text-rose-900 mt-1.5">{error}</p>
+                <p className="micro text-rose-700 mt-1">
                   {error.includes('quota')
                     ? 'The AI synthesis model hit temporary quota. Please wait a moment or verify your quota settings.'
                     : 'The policy engine blocks destructive queries (INSERT, UPDATE, DROP), unpermitted tables, and invalid schemas.'}
@@ -606,91 +612,70 @@ export default function Home() {
           </div>
         )}
 
-        {/* Results Studio (Stripe Composited Dashboard + Lovable Warm Cards) */}
+        {/* Results Studio */}
         {response && (
           <div className="space-y-6 animate-fade-in">
-            {/* Analyst Rationale (Lovable Warm Cream Card) */}
+            {/* Analyst Rationale (Lovable warm cream card) */}
             {response.insight && (
               <div className="craft-card craft-card-cream p-4 sm:p-5 flex items-start gap-3.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-300/60 text-amber-800 flex items-center justify-center shrink-0 text-sm">
+                <div className="w-8 h-8 rounded-[8px] bg-amber-100 border border-amber-300/60 text-amber-800 flex items-center justify-center shrink-0 text-sm">
                   💡
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900">
-                      Analyst Rationale
-                    </span>
-                    <span className="pill-tag pill-tag-emerald">
-                      ✓ Policy Approved
-                    </span>
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <span className="micro-cap text-amber-900">Analyst Rationale</span>
+                    <span className="pill-tag pill-tag-emerald">✓ Policy Approved</span>
                   </div>
-                  <p className="text-sm text-amber-950/90 leading-relaxed">
-                    {response.insight}
-                  </p>
+                  <p className="body-md text-amber-950/90">{response.insight}</p>
                 </div>
               </div>
             )}
 
-            {/* Financial/Data Metric Strip (Stripe tnum tabular figures) */}
+            {/* Data Metric Strip (Stripe tnum tabular figures) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="craft-card p-4">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)] block">
-                  Rows Returned
-                </span>
-                <div className="text-2xl font-semibold tracking-tight text-[var(--ink)] mt-1 tabular">
+                <span className="micro-cap text-[var(--ink-muted)] block">Rows Returned</span>
+                <div className="display-md text-[var(--ink)] mt-1 tabular">
                   {response.row_count ?? results.length}
                 </div>
-                <span className="text-[11px] text-[var(--ink-faint)] mt-1 flex items-center gap-1">
+                <span className="micro text-[var(--ink-faint)] mt-1 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Live database records
                 </span>
               </div>
 
               <div className="craft-card p-4">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)] block">
-                  Columns
-                </span>
-                <div className="text-2xl font-semibold tracking-tight text-[var(--ink)] mt-1 tabular">
-                  {columns.length}
-                </div>
-                <span className="text-[11px] text-[var(--ink-faint)] mt-1">
-                  Schema projection
-                </span>
+                <span className="micro-cap text-[var(--ink-muted)] block">Columns</span>
+                <div className="display-md text-[var(--ink)] mt-1 tabular">{columns.length}</div>
+                <span className="micro text-[var(--ink-faint)] mt-1">Schema projection</span>
               </div>
 
               <div className="craft-card p-4">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)] block">
-                  Policy Verdict
-                </span>
-                <div className="text-2xl font-semibold tracking-tight text-emerald-600 mt-1">
+                <span className="micro-cap text-[var(--ink-muted)] block">Policy Verdict</span>
+                <div className="display-md text-emerald-600 mt-1">
                   {response.status === 'BLOCKED' ? 'Blocked' : 'Allowed'}
                 </div>
-                <span className="text-[11px] text-[var(--ink-faint)] mt-1">
-                  Read-only verified
-                </span>
+                <span className="micro text-[var(--ink-faint)] mt-1">Read-only verified</span>
               </div>
 
               <div className="craft-card p-4">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)] block">
-                  Audit Block
-                </span>
-                <div className="text-sm font-mono font-semibold text-[var(--ink-secondary)] mt-2 truncate">
+                <span className="micro-cap text-[var(--ink-muted)] block">Audit Block</span>
+                <div className="body-tabular font-mono text-[var(--ink-secondary)] mt-2.5 truncate">
                   {response.audit_hash ? `#${response.audit_hash.slice(0, 10)}…` : 'Recorded'}
                 </div>
                 <a
                   href="/audit"
-                  className="text-[11px] text-[var(--primary)] hover:underline mt-1 block font-medium"
+                  className="micro text-[var(--primary)] hover:underline mt-1 block font-medium"
                 >
                   Verify in chain →
                 </a>
               </div>
             </div>
 
-            {/* Composited Dashboard Panel (Stripe Dark Track / Light Grid) */}
+            {/* Composited Dashboard Panel */}
             <div className="craft-card overflow-hidden">
-              {/* Tab Bar & Action Header */}
-              <div className="p-3 sm:px-5 sm:py-3.5 bg-gray-50/80 border-b border-[var(--border-light)] flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-1 bg-white p-1 rounded-full border border-[var(--border-light)] shadow-2xs">
+              <div className="p-3 sm:px-5 sm:py-3.5 bg-[var(--canvas-subtle)] border-b border-[var(--border-light)] flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-1 bg-[var(--canvas-card)] p-1 rounded-full border border-[var(--border-light)]">
                   <button
                     onClick={() => setActiveTab('table')}
                     className={`btn-ghost-pill text-xs py-1 px-3 ${activeTab === 'table' ? 'active' : ''}`}
@@ -733,7 +718,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* View Bodies */}
               <div>
                 {activeTab === 'table' && renderTable()}
                 {activeTab === 'chart' && renderChart()}
@@ -773,14 +757,13 @@ export default function Home() {
                 )}
 
                 {activeTab === 'json' && (
-                  <pre className="p-4 text-xs font-mono bg-gray-900 text-gray-100 max-h-[460px] overflow-auto leading-relaxed">
+                  <pre className="p-4 text-xs font-mono bg-[var(--code-bg)] text-gray-100 max-h-[460px] overflow-auto leading-relaxed">
                     {JSON.stringify(results, null, 2)}
                   </pre>
                 )}
               </div>
 
-              {/* Card Footer with Audit Link */}
-              <div className="px-5 py-3 bg-gray-50 border-t border-[var(--border-light)] flex flex-wrap items-center justify-between text-xs text-[var(--ink-muted)]">
+              <div className="px-5 py-3 bg-[var(--canvas-subtle)] border-t border-[var(--border-light)] flex flex-wrap items-center justify-between text-xs text-[var(--ink-muted)]">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span>Results verified &amp; PII-redacted before rendering</span>
@@ -795,7 +778,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Global Footer (Lovable clean spacing) */}
+        {/* Footer */}
         <footer className="mt-20 pt-8 border-t border-[var(--border-light)] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--ink-muted)]">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-[var(--ink)]">Dwarpal OS</span>
