@@ -2,10 +2,16 @@
 
 import { useState } from 'react';
 
+type QueryResponse = {
+  source?: string;
+  sql?: string | null;
+  results?: unknown;
+};
+
 export default function Home() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<any>(null);
+  const [response, setResponse] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,15 +29,15 @@ export default function Home() {
         body: JSON.stringify({ question }),
       });
 
-      const data = await res.json();
+      const data: QueryResponse & { detail?: string } = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.detail || 'Something went wrong');
+        throw new Error(data.detail || `Request failed (${res.status}).`);
       }
 
       setResponse(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not complete the query.');
     } finally {
       setLoading(false);
     }

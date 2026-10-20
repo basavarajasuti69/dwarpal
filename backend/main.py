@@ -50,6 +50,8 @@ class QueryResponse(BaseModel):
     status: str
     message: Optional[str] = None
     audit_hash: Optional[str] = None
+    source: Optional[str] = "live"
+    chart: Optional[str] = None
 
 
 class SqlGeneration(BaseModel):
@@ -220,6 +222,13 @@ def query_endpoint(req: QueryRequest):
             logger.exception("Failed to audit database error")
         raise HTTPException(status_code=500, detail=str(err)) from err
 
+    chart_type = "bar"
+    if columns and any(
+        kw in columns[0].lower()
+        for kw in ["date", "year", "month", "day", "time", "period", "quarter"]
+    ):
+        chart_type = "line"
+
     return QueryResponse(
         success=True,
         question=question,
@@ -232,6 +241,8 @@ def query_endpoint(req: QueryRequest):
         row_count=len(results),
         status="ALLOWED",
         audit_hash=audit_hash,
+        source="live",
+        chart=chart_type,
     )
 
 

@@ -13,17 +13,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dwarpal OS — Secure Intelligence",
-  description: "Secure natural language business intelligence, built for clarity and trust.",
+  title: "Dwarpal OS — Secure Data Intelligence",
+  description: "Enterprise natural language business intelligence with deterministic policy guardrails, PII redaction, and cryptographic audit logging.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-[var(--canvas)] text-[var(--ink)]">
+        {children}
+      </body>
     </html>
   );
 }
